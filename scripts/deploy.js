@@ -1,33 +1,34 @@
-// We require the Hardhat Runtime Environment explicitly here. This is optional
-// but useful for running the script in a standalone fashion through `node <script>`.
-//
-// You can also run a script with `npx hardhat run <script>`. If you do that, Hardhat
-// will compile your contracts, add the Hardhat Runtime Environment's members to the
-// global scope, and execute the script.
 const hre = require("hardhat");
 
+const WETH_ADDRESS = require("../config/contractAddrs.json").WETH;
+const CAERUS_ADDRESS = require("../config/contractAddrs.json").CAERUS;
+
 async function main() {
-  const currentTimestampInSeconds = Math.round(Date.now() / 1000);
-  const unlockTime = currentTimestampInSeconds + 60;
+  const [deployer] = await hre.ethers.getSigners();
 
-  const lockedAmount = hre.ethers.parseEther("0.001");
+  console.log("Deploying contracts with the account:", deployer.address);
 
-  const lock = await hre.ethers.deployContract("Lock", [unlockTime], {
-    value: lockedAmount,
-  });
+  // Deploy UniswapV2Factory
+  const UniswapV2Factory = await hre.ethers.getContractFactory("UniswapV2Factory");
+  const uniswapV2Factory = await UniswapV2Factory.deploy(deployer.address);
+  await uniswapV2Factory.deployed();
+  console.log("UniswapV2Factory deployed to:", uniswapV2Factory.address);
 
-  await lock.waitForDeployment();
+  // Deploy Utils
+  const Utils = await hre.ethers.getContractFactory("Utils");
+  const utils = await Utils.deploy();
+  await utils.deployed();
+  console.log("Utils deployed to:", utils.address);
 
-  console.log(
-    `Lock with ${ethers.formatEther(
-      lockedAmount
-    )}ETH and unlock timestamp ${unlockTime} deployed to ${lock.target}`
-  );
+  // Create WETH-Caerus pair using existing deployed contracts
+  await uniswapV2Factory.createPair(WETH_ADDRESS, CAERUS_ADDRESS);
+  const pairAddress = await uniswapV2Factory.getPair(WETH_ADDRESS, CAERUS_ADDRESS);
+  console.log(`WETH-Caerus pair created at address: ${pairAddress}`);
 }
 
-// We recommend this pattern to be able to use async/await everywhere
-// and properly handle errors.
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+main()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
